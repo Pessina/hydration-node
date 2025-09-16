@@ -61,7 +61,6 @@ pallet-staking = { workspace = true }
 pallet-liquidation = { workspace = true }
 pallet-hsm = { workspace = true }
 pallet-build-evm-tx = { workspace = true }
-pallet-xdex = { workspace = true }
 pallet-parameters = { workspace = true }
 
 # pallets
@@ -231,7 +230,6 @@ runtime-benchmarks = [
     "pallet-xyk/runtime-benchmarks",
     "pallet-hsm/runtime-benchmarks",
     "pallet-build-evm-tx/runtime-benchmarks",
-    "pallet-xdex/runtime-benchmarks",
     "pallet-elections-phragmen/runtime-benchmarks",
     "pallet-referrals/runtime-benchmarks",
     "pallet-evm-accounts/runtime-benchmarks",
@@ -325,7 +323,6 @@ std = [
     "pallet-duster/std",
     "pallet-hsm/std",
     "pallet-build-evm-tx/std",
-    "pallet-xdex/std",
     "pallet-parameters/std",
     "warehouse-liquidity-mining/std",
     "sp-api/std",
@@ -439,7 +436,6 @@ try-runtime = [
     "pallet-xyk/try-runtime",
     "pallet-hsm/try-runtime",
     "pallet-build-evm-tx/try-runtime",
-    "pallet-xdex/try-runtime",
     "pallet-referrals/try-runtime",
     "pallet-evm-accounts/try-runtime",
     "pallet-xyk-liquidity-mining/try-runtime",
