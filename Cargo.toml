@@ -50,6 +50,7 @@ members = [
     'liquidation-worker-support',
     'pallets/hsm',
     'pallets/build-evm-tx',
+    'pallets/xdex',
 ]
 
 resolver = "2"
@@ -155,6 +156,7 @@ pallet-broadcast = { path = "pallets/broadcast", default-features = false }
 liquidation-worker-support = { path = "liquidation-worker-support", default-features = false }
 pallet-hsm = { path = "pallets/hsm", default-features = false }
 pallet-build-evm-tx = { path = "pallets/build-evm-tx", default-features = false }
+pallet-xdex = { path = "pallets/xdex", default-features = false }
 pallet-parameters = { path = "pallets/parameters", default-features = false }
 
 hydra-dx-build-script-utils = { path = "utils/build-script-utils", default-features = false }

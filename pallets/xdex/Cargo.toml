@@ -1,0 +1,43 @@
+[package]
+name = "pallet-xdex"
+version = "1.0.0"
+authors = ["GalacticCouncil"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/galacticcouncil/hydration-node"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false }
+scale-info = { version = "2.9.0", default-features = false, features = ["derive"] }
+sp-std = { workspace = true }
+sp-core = { workspace = true }
+sp-runtime = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+pallet-build-evm-tx = { path = "../build-evm-tx", default-features = false }
+
+[dev-dependencies]
+sp-io = { workspace = true, default-features = true }
+
+[features]
+default = ["std"]
+std = [
+    "codec/std",
+    "scale-info/std",
+    "sp-std/std",
+    "sp-core/std",
+    "sp-runtime/std",
+    "frame-support/std",
+    "frame-system/std",
+    "pallet-build-evm-tx/std",
+]
+runtime-benchmarks = [
+    "frame-support/runtime-benchmarks",
+    "frame-system/runtime-benchmarks",
+    "pallet-build-evm-tx/runtime-benchmarks",
+]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "pallet-build-evm-tx/try-runtime",
+]

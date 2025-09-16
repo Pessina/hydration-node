@@ -1,0 +1,98 @@
+use crate as pallet_xdex;
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{ConstU16, ConstU32, ConstU64},
+};
+use sp_core::H256;
+use sp_runtime::{
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
+
+type Block = frame_system::mocking::MockBlock<Test>;
+
+pub const ALICE: u64 = 1;
+pub const BOB: u64 = 2;
+
+construct_runtime!(
+	pub enum Test
+	{
+		System: frame_system,
+		BuildEvmTx: pallet_build_evm_tx,
+		Xdex: pallet_xdex,
+	}
+);
+
+impl frame_system::Config for Test {
+	type BaseCallFilter = frame_support::traits::Everything;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type Nonce = u64;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type Block = Block;
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
+	type Version = ();
+	type PalletInfo = PalletInfo;
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
+	type SS58Prefix = ConstU16<42>;
+	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
+	type RuntimeTask = ();
+	type SingleBlockMigrations = ();
+	type MultiBlockMigrator = ();
+	type PreInherents = ();
+	type PostInherents = ();
+	type PostTransactions = ();
+}
+
+parameter_types! {
+	pub const MaxTransactionsPerAccount: u32 = 10;
+	pub const MaxDataLength: u32 = 100_000;
+	pub const TokenContractAddress: [u8; 20] = [
+		0xA0, 0xb8, 0x69, 0x91, 0xc6, 0x21, 0x8b, 0x36, 0xc1, 0xd1,
+		0x9D, 0x4a, 0x2e, 0x9E, 0xb0, 0xce, 0x36, 0x06, 0xeB, 0x48,
+	];
+	pub const DefaultChainId: u64 = 1; // Ethereum mainnet
+}
+
+impl pallet_build_evm_tx::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type MaxDataLength = MaxDataLength;
+}
+
+impl pallet_xdex::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type MaxTransactionsPerAccount = MaxTransactionsPerAccount;
+	type TokenContractAddress = TokenContractAddress;
+	type DefaultChainId = DefaultChainId;
+}
+
+pub struct ExtBuilder;
+
+impl ExtBuilder {
+	pub fn build(self) -> sp_io::TestExternalities {
+		let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+
+		let mut r: sp_io::TestExternalities = t.into();
+
+		r.execute_with(|| {
+			System::set_block_number(1);
+		});
+
+		r
+	}
+}
+
+pub fn new_test_ext() -> sp_io::TestExternalities {
+	ExtBuilder.build()
+}

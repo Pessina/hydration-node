@@ -202,6 +202,7 @@ construct_runtime!(
 		HSM: pallet_hsm = 82,
 		Parameters: pallet_parameters = 83,
 		BuildEvmTx: pallet_build_evm_tx = 86,
+		Xdex: pallet_xdex = 87,
 
 		// ORML related modules
 		Tokens: orml_tokens = 77,

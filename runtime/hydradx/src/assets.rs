@@ -1822,6 +1822,23 @@ impl pallet_build_evm_tx::Config for Runtime {
 	type MaxDataLength = MaxEvmDataLength;
 }
 
+parameter_types! {
+	pub const MaxTransactionsPerAccount: u32 = 100;
+	// Mock USDC contract address
+	pub const XdexTokenContractAddress: [u8; 20] = [
+		0xA0, 0xb8, 0x69, 0x91, 0xc6, 0x21, 0x8b, 0x36, 0xc1, 0xd1,
+		0x9D, 0x4a, 0x2e, 0x9E, 0xb0, 0xce, 0x36, 0x06, 0xeB, 0x48,
+	];
+	pub const XdexDefaultChainId: u64 = 1; // Ethereum mainnet
+}
+
+impl pallet_xdex::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type MaxTransactionsPerAccount = MaxTransactionsPerAccount;
+	type TokenContractAddress = XdexTokenContractAddress;
+	type DefaultChainId = XdexDefaultChainId;
+}
+
 pub struct ConvertViaOmnipool<SP>(PhantomData<SP>);
 impl<SP> Convert<AccountId, AssetId, Balance> for ConvertViaOmnipool<SP>
 where
