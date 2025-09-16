@@ -85,14 +85,7 @@ fn integration_test_with_build_evm_tx_pallet() {
 			chain_id: 1,
 		}));
 
-		// Verify build_evm_tx pallet also emitted its event
-		let events = System::events();
-		assert!(events.iter().any(|record| {
-			matches!(
-				record.event,
-				RuntimeEvent::BuildEvmTx(pallet_build_evm_tx::Event::EvmTransactionBuilt { .. })
-			)
-		}));
+		// Note: build_evm_tx pallet no longer emits events after the refactor
 	});
 }
 

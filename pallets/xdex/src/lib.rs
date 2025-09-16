@@ -48,15 +48,8 @@ pub mod pallet {
 	/// Transaction hashes by account and index
 	#[pallet::storage]
 	#[pallet::getter(fn transaction_hashes)]
-	pub type TransactionHashes<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		Blake2_128Concat,
-		u32,
-		H256,
-		OptionQuery,
-	>;
+	pub type TransactionHashes<T: Config> =
+		StorageDoubleMap<_, Blake2_128Concat, T::AccountId, Blake2_128Concat, u32, H256, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -118,7 +111,7 @@ pub mod pallet {
 			max_priority_fee_per_gas: u128,
 			chain_id: u64,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let who = ensure_signed(origin.clone())?;
 
 			// Validate token contract address is 20 bytes
 			ensure!(token_contract_address.len() == 20, Error::<T>::InvalidContractAddress);
@@ -129,13 +122,14 @@ pub mod pallet {
 
 			// Validate recipient address is 20 bytes
 			ensure!(recipient.len() == 20, Error::<T>::InvalidRecipientAddress);
-			let recipient_array: [u8; 20] = recipient
-				.try_into()
-				.map_err(|_| Error::<T>::InvalidRecipientAddress)?;
+			let recipient_array: [u8; 20] = recipient.try_into().map_err(|_| Error::<T>::InvalidRecipientAddress)?;
 
 			// Get current transaction count for this account
 			let current_count = TransactionCount::<T>::get(&who);
-			ensure!(current_count < T::MaxTransactionsPerAccount::get(), Error::<T>::TooManyTransactions);
+			ensure!(
+				current_count < T::MaxTransactionsPerAccount::get(),
+				Error::<T>::TooManyTransactions
+			);
 
 			// Build ERC20 transfer ABI-encoded data
 			let data = Self::encode_erc20_transfer(&recipient_array, amount);
@@ -143,7 +137,7 @@ pub mod pallet {
 			// Build the EVM transaction using build_evm_tx pallet
 			// The 'to' address is the token contract, not the recipient
 			let rlp_data = pallet_build_evm_tx::Pallet::<T>::build_evm_tx(
-				Some(who.clone()), // Pass who to emit event
+				origin,
 				Some(token_contract_address),
 				0, // No ETH value for ERC20 transfer
 				data,
@@ -194,10 +188,7 @@ pub mod pallet {
 			TransactionCount::<T>::insert(&who, 0);
 
 			// Emit event
-			Self::deposit_event(Event::TransactionsCleared {
-				who,
-				count,
-			});
+			Self::deposit_event(Event::TransactionsCleared { who, count });
 
 			Ok(())
 		}
