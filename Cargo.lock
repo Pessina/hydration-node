@@ -9572,6 +9572,8 @@ dependencies = [
 name = "pallet-xdex"
 version = "1.0.0"
 dependencies = [
+ "ethabi",
+ "ethereum-types 0.15.1",
  "frame-support",
  "frame-system",
  "pallet-build-evm-tx",

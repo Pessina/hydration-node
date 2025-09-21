@@ -70,6 +70,8 @@ pub mod pallet {
 			value: u128,
 			/// Chain ID for the transaction
 			chain_id: u64,
+			/// ABI-encoded calldata for ERC20 transfer
+			calldata: Vec<u8>,
 		},
 		/// All transactions cleared for an account
 		TransactionsCleared {
@@ -131,7 +133,7 @@ pub mod pallet {
 				Error::<T>::TooManyTransactions
 			);
 
-			// Build ERC20 transfer ABI-encoded data
+			// Build ERC20 transfer ABI-encoded data (encoded fully on-chain)
 			let data = Self::encode_erc20_transfer(&recipient_array, amount);
 
 			// Build the EVM transaction using build_evm_tx pallet
@@ -167,6 +169,7 @@ pub mod pallet {
 				to: recipient_array,
 				value: amount,
 				chain_id,
+				calldata: data,
 			});
 
 			Ok(())
@@ -195,24 +198,39 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Encode ERC20 transfer function call
+		/// Encode ERC20 transfer function call using ethabi
 		/// transfer(address,uint256)
 		fn encode_erc20_transfer(recipient: &[u8; 20], amount: u128) -> Vec<u8> {
-			let mut data = Vec::with_capacity(68);
+			use ethabi::{encode, Function, Param, ParamType, StateMutability, Token};
+			use ethereum_types::{Address, U256};
 
-			// Function selector for transfer(address,uint256)
-			data.extend_from_slice(&ERC20_TRANSFER_SELECTOR);
+			let function = Function {
+				name: "transfer".into(),
+				inputs: vec![
+					Param {
+						name: "to".into(),
+						kind: ParamType::Address,
+						internal_type: None,
+					},
+					Param {
+						name: "amount".into(),
+						kind: ParamType::Uint(256),
+						internal_type: None,
+					},
+				],
+				outputs: vec![Param {
+					name: "".into(),
+					kind: ParamType::Bool,
+					internal_type: None,
+				}],
+				constant: None,
+				state_mutability: StateMutability::NonPayable,
+			};
 
-			// Recipient address (padded to 32 bytes)
-			data.extend_from_slice(&[0u8; 12]); // Padding
-			data.extend_from_slice(recipient);
-
-			// Amount (uint256, 32 bytes)
-			let mut amount_bytes = [0u8; 32];
-			amount_bytes[16..].copy_from_slice(&amount.to_be_bytes());
-			data.extend_from_slice(&amount_bytes);
-
-			data
+			let to = Address::from_slice(recipient);
+			let value = U256::from(amount);
+			let tokens = vec![Token::Address(to), Token::Uint(value)];
+			function.encode_input(&tokens).unwrap_or_default()
 		}
 	}
 }

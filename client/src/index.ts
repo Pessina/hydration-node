@@ -1,8 +1,17 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import Keyring from '@polkadot/keyring';
-import { hexToU8a, isHex } from '@polkadot/util';
+import { hexToU8a, isHex, u8aToHex } from '@polkadot/util';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { CONFIG } from './config.js';
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  getAddress,
+  Hex,
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { sepolia } from 'viem/chains';
 
 function hexAddressToBytes20(hex: string): Uint8Array {
   if (!isHex(hex)) {
@@ -29,71 +38,109 @@ async function main() {
   const keyring = new Keyring({ type: 'sr25519' });
   const alice = keyring.addFromUri(CONFIG.substrateAccount);
 
+  // viem setup (Sepolia via Infura)
+  const account = privateKeyToAccount(CONFIG.evmPrivateKey as Hex);
+  const publicClient = createPublicClient({
+    chain: sepolia,
+    transport: http(CONFIG.sepoliaRpc),
+  });
+  const walletClient = createWalletClient({
+    account,
+    chain: sepolia,
+    transport: http(CONFIG.sepoliaRpc),
+  });
+
+  // Prepare params
   const token = hexAddressToBytes20(CONFIG.tokenAddress);
   const recipient = hexAddressToBytes20(CONFIG.recipient);
-  const amount = CONFIG.amount.toString(); // u128 as string
-
-  const nonce = 0; // u64
-  const gasLimit = 100000; // u64
-  const maxFeePerGas = String(30_000_000_000n); // u128
-  const maxPriorityFeePerGas = String(2_000_000_000n); // u128
+  const amountU128String = CONFIG.amount.toString(); // for pallet (u128)
   const chainId = CONFIG.chainId; // u64
 
+  // Resolve live EVM params (no calldata encoding in FE)
+  const evmNonce = await publicClient.getTransactionCount({
+    address: account.address,
+    blockTag: 'pending',
+  });
+  const fees = await publicClient.estimateFeesPerGas();
+  const maxFeePerGasBig = fees.maxFeePerGas ?? 30_000_000_000n;
+  const maxPriorityFeePerGasBig = fees.maxPriorityFeePerGas ?? 2_000_000_000n;
+
+  // Map to pallet types
+  const nonce = Number(evmNonce);
+  const gasLimit = 100000; // conservative default; not estimated on FE
+  const maxFeePerGas = String(maxFeePerGasBig);
+  const maxPriorityFeePerGas = String(maxPriorityFeePerGasBig);
+
   console.log('Calling xdex.buildErc20Transfer ...');
-  const unsub = await api.tx.xdex
-    .buildErc20Transfer(
-      Array.from(token),
-      Array.from(recipient),
-      amount,
-      nonce,
-      gasLimit,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
-      chainId,
-    )
-    .signAndSend(alice, ({ status, events }) => {
-      if (status.isInBlock) {
-        console.log(`Included in block ${status.asInBlock.toString()}`);
-      }
-      if (status.isFinalized) {
-        console.log(`Finalized in block ${status.asFinalized.toString()}`);
+  let builtCalldata: Hex | null = null;
+  await new Promise<void>(async (resolve) => {
+    const unsub = await api.tx.xdex
+      .buildErc20Transfer(
+        Array.from(token),
+        Array.from(recipient),
+        amountU128String,
+        nonce,
+        gasLimit,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        chainId,
+      )
+      .signAndSend(alice, ({ status, events }) => {
+        if (status.isInBlock) {
+          console.log(`Included in block ${status.asInBlock.toString()}`);
+        }
         for (const { event } of events) {
           const { section, method } = event;
           if (section === 'xdex' && method === 'Erc20TransferBuilt') {
-            console.log('Erc20TransferBuilt:', event.toHuman());
+            const dataVec: any[] = (event as any).data as any[];
+            const last = dataVec[dataVec.length - 1];
+            let hex: string | null = null;
+            if (last && typeof last.toHex === 'function') hex = last.toHex();
+            else if (last && typeof last.toU8a === 'function')
+              hex = u8aToHex(last.toU8a());
+            else if (Array.isArray(last))
+              hex = u8aToHex(Uint8Array.from(last as number[]));
+            else if (typeof last === 'string' && isHex(last)) hex = last;
+            if (hex && isHex(hex)) {
+              builtCalldata = hex as Hex;
+            }
+            console.log('Erc20TransferBuilt (calldata extracted)');
           }
         }
-        unsub();
-      }
-    });
-
-  // After finalized, query storage for confirmation
-  await api.rpc.chain.subscribeFinalizedHeads(async () => {
-    const who = alice.address;
-    if (
-      api.query.xdex &&
-      api.query.xdex.transactionCount &&
-      api.query.xdex.transactionHashes
-    ) {
-      const count: any = await api.query.xdex.transactionCount(who);
-      console.log('TransactionCount:', count.toString());
-      if (count.toNumber() > 0) {
-        const lastIdx = count.toNumber() - 1;
-        const hashOpt: any = await api.query.xdex.transactionHashes(
-          who,
-          lastIdx,
-        );
-        console.log(
-          'Last transaction hash (Blake2-256 of RLP):',
-          hashOpt.toString(),
-        );
-        process.exit(0);
-      }
-    } else {
-      console.warn('xdex storage not available on this chain');
-      process.exit(0);
-    }
+        if (status.isFinalized) {
+          console.log(`Finalized in block ${status.asFinalized.toString()}`);
+          unsub();
+          resolve();
+        }
+      });
   });
+
+  // After finalized, broadcast via viem using calldata from pallet
+  console.log('Broadcasting EVM tx to Sepolia ...');
+  if (!builtCalldata) throw new Error('Missing calldata from pallet event');
+  const estimatedGas = await publicClient.estimateGas({
+    account: account.address,
+    to: getAddress(CONFIG.tokenAddress),
+    data: builtCalldata,
+    value: 0n,
+  });
+  const txHash = await walletClient.sendTransaction({
+    to: getAddress(CONFIG.tokenAddress),
+    data: builtCalldata,
+    value: 0n,
+    nonce: BigInt(evmNonce),
+    gas: estimatedGas,
+    maxFeePerGas: maxFeePerGasBig,
+    maxPriorityFeePerGas: maxPriorityFeePerGasBig,
+    chain: sepolia,
+    account,
+  });
+  console.log('Sepolia tx hash:', txHash);
+
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+  });
+  console.log('Sepolia tx receipt status:', receipt.status);
 }
 
 main().catch((e) => {
