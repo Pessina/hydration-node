@@ -15,9 +15,9 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use sp_std::vec; // bring vec! macro into scope for no_std
 
-	/// ERC20 transfer function selector: transfer(address,uint256)
-	const ERC20_TRANSFER_SELECTOR: [u8; 4] = [0xa9, 0x05, 0x9c, 0xbb];
+	// ERC20 transfer function selector: transfer(address,uint256)
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -135,18 +135,22 @@ pub mod pallet {
 
 			// Build ERC20 transfer ABI-encoded data (encoded fully on-chain)
 			let data = Self::encode_erc20_transfer(&recipient_array, amount);
+			let calldata = data.clone();
 
 			// Build the EVM transaction using build_evm_tx pallet
 			// The 'to' address is the token contract, not the recipient
+			use sp_core::H160;
+			let to_h160 = H160::from(token_contract_array);
 			let rlp_data = pallet_build_evm_tx::Pallet::<T>::build_evm_tx(
 				origin,
-				Some(token_contract_address),
+				Some(to_h160),
 				0, // No ETH value for ERC20 transfer
 				data,
 				nonce,
 				gas_limit,
 				max_fee_per_gas,
 				max_priority_fee_per_gas,
+				Vec::new(),
 				chain_id,
 			)
 			.map_err(|_| Error::<T>::EvmTransactionBuildFailed)?;
@@ -169,7 +173,7 @@ pub mod pallet {
 				to: recipient_array,
 				value: amount,
 				chain_id,
-				calldata: data,
+				calldata,
 			});
 
 			Ok(())
@@ -200,9 +204,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Encode ERC20 transfer function call using ethabi
 		/// transfer(address,uint256)
-		fn encode_erc20_transfer(recipient: &[u8; 20], amount: u128) -> Vec<u8> {
-			use ethabi::{encode, Function, Param, ParamType, StateMutability, Token};
-			use ethereum_types::{Address, U256};
+		pub(crate) fn encode_erc20_transfer(recipient: &[u8; 20], amount: u128) -> Vec<u8> {
+			use ethabi::{Function, Param, ParamType, StateMutability, Token};
+			use sp_core::{H160 as Address, U256};
 
 			let function = Function {
 				name: "transfer".into(),
@@ -227,7 +231,7 @@ pub mod pallet {
 				state_mutability: StateMutability::NonPayable,
 			};
 
-			let to = Address::from_slice(recipient);
+			let to = Address::from(*recipient);
 			let value = U256::from(amount);
 			let tokens = vec![Token::Address(to), Token::Uint(value)];
 			function.encode_input(&tokens).unwrap_or_default()

@@ -1,15 +1,10 @@
-import { ApiPromise, WsProvider } from '@polkadot/api';
+import { ApiPromise, WsProvider, type SubmittableResult } from '@polkadot/api';
 import Keyring from '@polkadot/keyring';
 import { hexToU8a, isHex, u8aToHex } from '@polkadot/util';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { CONFIG } from './config.js';
-import {
-  createPublicClient,
-  createWalletClient,
-  http,
-  getAddress,
-  Hex,
-} from 'viem';
+import { createPublicClient, createWalletClient, http, getAddress } from 'viem';
+import type { Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 
@@ -34,6 +29,7 @@ async function main() {
   if (!api.tx.xdex || !api.tx.xdex.buildErc20Transfer) {
     throw new Error('xdex.buildErc20Transfer extrinsic not found in metadata');
   }
+  const xdex = api.tx.xdex!;
 
   const keyring = new Keyring({ type: 'sr25519' });
   const alice = keyring.addFromUri(CONFIG.substrateAccount);
@@ -74,45 +70,45 @@ async function main() {
   console.log('Calling xdex.buildErc20Transfer ...');
   let builtCalldata: Hex | null = null;
   await new Promise<void>(async (resolve) => {
-    const unsub = await api.tx.xdex
-      .buildErc20Transfer(
-        Array.from(token),
-        Array.from(recipient),
-        amountU128String,
-        nonce,
-        gasLimit,
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        chainId,
-      )
-      .signAndSend(alice, ({ status, events }) => {
-        if (status.isInBlock) {
-          console.log(`Included in block ${status.asInBlock.toString()}`);
-        }
-        for (const { event } of events) {
-          const { section, method } = event;
-          if (section === 'xdex' && method === 'Erc20TransferBuilt') {
-            const dataVec: any[] = (event as any).data as any[];
-            const last = dataVec[dataVec.length - 1];
-            let hex: string | null = null;
-            if (last && typeof last.toHex === 'function') hex = last.toHex();
-            else if (last && typeof last.toU8a === 'function')
-              hex = u8aToHex(last.toU8a());
-            else if (Array.isArray(last))
-              hex = u8aToHex(Uint8Array.from(last as number[]));
-            else if (typeof last === 'string' && isHex(last)) hex = last;
-            if (hex && isHex(hex)) {
-              builtCalldata = hex as Hex;
-            }
-            console.log('Erc20TransferBuilt (calldata extracted)');
+    const build = xdex.buildErc20Transfer;
+    if (!build) throw new Error('buildErc20Transfer not available');
+    const unsub = await build(
+      Array.from(token),
+      Array.from(recipient),
+      amountU128String,
+      nonce,
+      gasLimit,
+      maxFeePerGas,
+      maxPriorityFeePerGas,
+      chainId,
+    ).signAndSend(alice, ({ status, events }: SubmittableResult) => {
+      if (status.isInBlock) {
+        console.log(`Included in block ${status.asInBlock.toString()}`);
+      }
+      for (const { event } of events) {
+        const { section, method } = event;
+        if (section === 'xdex' && method === 'Erc20TransferBuilt') {
+          const dataVec: any[] = (event as any).data as any[];
+          const last = dataVec[dataVec.length - 1];
+          let hex: string | null = null;
+          if (last && typeof last.toHex === 'function') hex = last.toHex();
+          else if (last && typeof last.toU8a === 'function')
+            hex = u8aToHex(last.toU8a());
+          else if (Array.isArray(last))
+            hex = u8aToHex(Uint8Array.from(last as number[]));
+          else if (typeof last === 'string' && isHex(last)) hex = last;
+          if (hex && isHex(hex)) {
+            builtCalldata = hex as Hex;
           }
+          console.log('Erc20TransferBuilt (calldata extracted)');
         }
-        if (status.isFinalized) {
-          console.log(`Finalized in block ${status.asFinalized.toString()}`);
-          unsub();
-          resolve();
-        }
-      });
+      }
+      if (status.isFinalized) {
+        console.log(`Finalized in block ${status.asFinalized.toString()}`);
+        unsub();
+        resolve();
+      }
+    });
   });
 
   // After finalized, broadcast via viem using calldata from pallet
@@ -128,7 +124,7 @@ async function main() {
     to: getAddress(CONFIG.tokenAddress),
     data: builtCalldata,
     value: 0n,
-    nonce: BigInt(evmNonce),
+    nonce: evmNonce,
     gas: estimatedGas,
     maxFeePerGas: maxFeePerGasBig,
     maxPriorityFeePerGas: maxPriorityFeePerGasBig,
@@ -141,6 +137,12 @@ async function main() {
     hash: txHash,
   });
   console.log('Sepolia tx receipt status:', receipt.status);
+
+  // Cleanly disconnect and exit to avoid hanging the terminal
+  try {
+    await api.disconnect();
+  } catch {}
+  process.exit(0);
 }
 
 main().catch((e) => {

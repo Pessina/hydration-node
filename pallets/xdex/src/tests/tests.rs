@@ -5,9 +5,12 @@ use frame_support::{assert_noop, assert_ok};
 #[test]
 fn build_erc20_transfer_works() {
 	new_test_ext().execute_with(|| {
-		let token_contract = vec![0xA0, 0xb8, 0x69, 0x91, 0xc6, 0x21, 0x8b, 0x36, 0xc1, 0xd1,
-			0x9D, 0x4a, 0x2e, 0x9E, 0xb0, 0xce, 0x36, 0x06, 0xeB, 0x48];
+		let token_contract = vec![
+			0xA0, 0xb8, 0x69, 0x91, 0xc6, 0x21, 0x8b, 0x36, 0xc1, 0xd1, 0x9D, 0x4a, 0x2e, 0x9E, 0xb0, 0xce, 0x36, 0x06,
+			0xeB, 0x48,
+		];
 		let recipient = vec![0x11; 20];
+		let recipient_clone = recipient.clone();
 		let amount = 1_000_000_000_000_000_000u128; // 1 token
 		let nonce = 0u64;
 		let gas_limit = 100_000u64;
@@ -37,9 +40,12 @@ fn build_erc20_transfer_works() {
 			transaction_hash: Xdex::transaction_hashes(ALICE, 0).unwrap(),
 			index: 0,
 			token_contract: token_contract.try_into().unwrap(),
-			to: recipient.try_into().unwrap(),
+			to: recipient_clone.try_into().unwrap(),
 			value: amount,
 			chain_id,
+			calldata: Xdex::transaction_hashes(ALICE, 0)
+				.and_then(|_| Some(Xdex::encode_erc20_transfer(&recipient.try_into().unwrap(), amount)))
+				.unwrap(),
 		}));
 	});
 }
@@ -162,10 +168,7 @@ fn clear_transactions_works() {
 		}
 
 		// Check event
-		System::assert_last_event(RuntimeEvent::Xdex(Event::TransactionsCleared {
-			who: ALICE,
-			count: 5,
-		}));
+		System::assert_last_event(RuntimeEvent::Xdex(Event::TransactionsCleared { who: ALICE, count: 5 }));
 	});
 }
 
@@ -316,8 +319,8 @@ fn erc20_transfer_encoding_is_correct() {
 	new_test_ext().execute_with(|| {
 		let token_contract = vec![0xA0; 20];
 		let recipient = vec![
-			0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22, 0x33, 0x44,
-			0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee,
+			0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc,
+			0xdd, 0xee,
 		];
 		let amount = 1_234_567_890_000_000_000u128;
 

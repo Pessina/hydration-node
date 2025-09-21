@@ -55,6 +55,7 @@ fn integration_test_with_build_evm_tx_pallet() {
 	new_test_ext().execute_with(|| {
 		let token_contract = vec![0xA0; 20];
 		let recipient = vec![0x99; 20];
+		let recipient_clone = recipient.clone();
 		let amount = 1_500_000_000_000_000_000u128;
 
 		// Build ERC20 transfer through xdex
@@ -80,9 +81,10 @@ fn integration_test_with_build_evm_tx_pallet() {
 			transaction_hash: tx_hash,
 			index: 0,
 			token_contract: token_contract.try_into().unwrap(),
-			to: recipient.try_into().unwrap(),
+			to: recipient_clone.try_into().unwrap(),
 			value: amount,
 			chain_id: 1,
+			calldata: Xdex::encode_erc20_transfer(&recipient.try_into().unwrap(), amount),
 		}));
 
 		// Note: build_evm_tx pallet no longer emits events after the refactor
@@ -101,10 +103,10 @@ fn integration_test_gas_parameters() {
 			token_contract,
 			recipient.clone(),
 			2_000_000_000_000_000_000u128,
-			0, // nonce
-			150_000, // higher gas limit
+			0,              // nonce
+			150_000,        // higher gas limit
 			50_000_000_000, // higher max fee
-			5_000_000_000, // higher priority fee
+			5_000_000_000,  // higher priority fee
 			1
 		));
 
@@ -178,11 +180,7 @@ fn integration_test_maximum_transaction_limit() {
 fn integration_test_different_recipients_same_sender() {
 	new_test_ext().execute_with(|| {
 		let token_contract = vec![0xA0; 20];
-		let recipients = vec![
-			vec![0x11; 20],
-			vec![0x22; 20],
-			vec![0x33; 20],
-		];
+		let recipients = vec![vec![0x11; 20], vec![0x22; 20], vec![0x33; 20]];
 
 		// Send to different recipients
 		for (i, recipient) in recipients.iter().enumerate() {
