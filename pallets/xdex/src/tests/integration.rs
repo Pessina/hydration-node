@@ -80,11 +80,28 @@ fn integration_test_with_build_evm_tx_pallet() {
 			who: ALICE,
 			transaction_hash: tx_hash,
 			index: 0,
-			token_contract: token_contract.try_into().unwrap(),
+			token_contract: token_contract.clone().try_into().unwrap(),
 			to: recipient_clone.try_into().unwrap(),
 			value: amount,
 			chain_id: 1,
-			calldata: Xdex::encode_erc20_transfer(&recipient.try_into().unwrap(), amount),
+			calldata: Xdex::encode_erc20_transfer(&recipient.clone().try_into().unwrap(), amount),
+			rlp: {
+				let token_arr: [u8; 20] = token_contract.clone().try_into().unwrap();
+				let to = sp_core::H160::from(token_arr);
+				pallet_build_evm_tx::Pallet::<Test>::build_evm_tx(
+					RuntimeOrigin::signed(ALICE),
+					Some(to),
+					0,
+					Xdex::encode_erc20_transfer(&recipient.clone().try_into().unwrap(), amount),
+					0,
+					100_000,
+					30_000_000_000,
+					2_000_000_000,
+					Vec::new(),
+					1,
+				)
+				.expect("should build rlp")
+			},
 		}));
 
 		// Note: build_evm_tx pallet no longer emits events after the refactor

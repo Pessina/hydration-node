@@ -72,6 +72,8 @@ pub mod pallet {
 			chain_id: u64,
 			/// ABI-encoded calldata for ERC20 transfer
 			calldata: Vec<u8>,
+			/// Unsigned EIP-1559 RLP bytes (type 0x02 prefix + message)
+			rlp: Vec<u8>,
 		},
 		/// All transactions cleared for an account
 		TransactionsCleared {
@@ -174,6 +176,7 @@ pub mod pallet {
 				value: amount,
 				chain_id,
 				calldata,
+				rlp: rlp_data,
 			});
 
 			Ok(())

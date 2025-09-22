@@ -39,13 +39,28 @@ fn build_erc20_transfer_works() {
 			who: ALICE,
 			transaction_hash: Xdex::transaction_hashes(ALICE, 0).unwrap(),
 			index: 0,
-			token_contract: token_contract.try_into().unwrap(),
+			token_contract: token_contract.clone().try_into().unwrap(),
 			to: recipient_clone.try_into().unwrap(),
 			value: amount,
 			chain_id,
-			calldata: Xdex::transaction_hashes(ALICE, 0)
-				.and_then(|_| Some(Xdex::encode_erc20_transfer(&recipient.try_into().unwrap(), amount)))
-				.unwrap(),
+			calldata: Xdex::encode_erc20_transfer(&recipient.clone().try_into().unwrap(), amount),
+			rlp: {
+				let token_arr: [u8; 20] = token_contract.clone().try_into().unwrap();
+				let to = sp_core::H160::from(token_arr);
+				pallet_build_evm_tx::Pallet::<Test>::build_evm_tx(
+					RuntimeOrigin::signed(ALICE),
+					Some(to),
+					0,
+					Xdex::encode_erc20_transfer(&recipient.clone().try_into().unwrap(), amount),
+					nonce,
+					gas_limit,
+					max_fee_per_gas,
+					max_priority_fee_per_gas,
+					Vec::new(),
+					chain_id,
+				)
+				.expect("should build rlp")
+			},
 		}));
 	});
 }
