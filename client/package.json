@@ -14,16 +14,11 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@ethereumjs/common": "^10.0.0",
-    "@ethereumjs/rlp": "^4.0.1",
-    "@ethereumjs/tx": "^10.0.0",
-    "@noble/curves": "^1.5.0",
     "@noble/secp256k1": "^1.7.1",
     "@polkadot/api": "^16.4.7",
     "@polkadot/keyring": "^13.5.6",
     "@polkadot/util": "^13.5.6",
     "@polkadot/util-crypto": "^13.5.6",
-    "buffer": "^6.0.3",
     "dotenv": "^17.2.2",
     "viem": "^2.19.3",
     "zod": "^4.1.8"

@@ -1,6 +1,7 @@
 use super::mock::*;
-use crate::{Error, Event};
-use frame_support::{assert_noop, assert_ok};
+use crate::Event;
+use frame_support::assert_ok;
+use sp_core::H160;
 
 #[test]
 fn integration_test_full_transaction_lifecycle() {
@@ -8,45 +9,19 @@ fn integration_test_full_transaction_lifecycle() {
 		let token_contract = vec![0xA0; 20];
 		let recipient = vec![0x88; 20];
 
-		// Alice creates multiple transactions
-		for i in 0..3 {
-			assert_ok!(Xdex::build_erc20_transfer(
-				RuntimeOrigin::signed(ALICE),
-				token_contract.clone(),
-				recipient.clone(),
-				1000 * (i + 1) as u128,
-				i as u64, // nonce
-				100_000,
-				30_000_000_000,
-				2_000_000_000,
-				1
-			));
-		}
-
-		// Bob creates transactions independently
 		assert_ok!(Xdex::build_erc20_transfer(
-			RuntimeOrigin::signed(BOB),
-			token_contract.clone(),
-			recipient.clone(),
-			5000,
-			0, // nonce
+			RuntimeOrigin::signed(ALICE),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract.clone()).unwrap()),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient.clone()).unwrap()),
+			1000,
+			0,
 			100_000,
 			30_000_000_000,
 			2_000_000_000,
 			1
 		));
 
-		// Verify counts
-		assert_eq!(Xdex::transaction_count(ALICE), 3);
-		assert_eq!(Xdex::transaction_count(BOB), 1);
-
-		// Alice clears her transactions
-		assert_ok!(Xdex::clear_transactions(RuntimeOrigin::signed(ALICE)));
-		assert_eq!(Xdex::transaction_count(ALICE), 0);
-
-		// Bob's transactions remain
-		assert_eq!(Xdex::transaction_count(BOB), 1);
-		assert!(Xdex::transaction_hashes(BOB, 0).is_some());
+		assert!(matches!(System::events().last().unwrap().event, RuntimeEvent::Xdex(_)));
 	});
 }
 
@@ -55,14 +30,14 @@ fn integration_test_with_build_evm_tx_pallet() {
 	new_test_ext().execute_with(|| {
 		let token_contract = vec![0xA0; 20];
 		let recipient = vec![0x99; 20];
-		let recipient_clone = recipient.clone();
+		let _recipient_clone = recipient.clone();
 		let amount = 1_500_000_000_000_000_000u128;
 
 		// Build ERC20 transfer through xdex
 		assert_ok!(Xdex::build_erc20_transfer(
 			RuntimeOrigin::signed(ALICE),
-			token_contract.clone(),
-			recipient.clone(),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract.clone()).unwrap()),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient.clone()).unwrap()),
 			amount,
 			0, // nonce
 			100_000,
@@ -71,37 +46,25 @@ fn integration_test_with_build_evm_tx_pallet() {
 			1
 		));
 
-		// Verify the transaction was built and stored
-		assert_eq!(Xdex::transaction_count(ALICE), 1);
-		let tx_hash = Xdex::transaction_hashes(ALICE, 0).unwrap();
-
-		// Verify the event was emitted
+		// Verify the event was emitted with RLP
+		let token_arr: [u8; 20] = token_contract.clone().try_into().unwrap();
+		let to = H160::from(token_arr);
+		let expected_rlp = pallet_build_evm_tx::Pallet::<Test>::build_evm_tx(
+			RuntimeOrigin::signed(ALICE),
+			Some(to),
+			0,
+			Xdex::encode_erc20_transfer(&recipient.clone().try_into().unwrap(), amount),
+			0,
+			100_000,
+			30_000_000_000,
+			2_000_000_000,
+			Vec::new(),
+			1,
+		)
+		.expect("should build rlp");
 		System::assert_last_event(RuntimeEvent::Xdex(Event::Erc20TransferBuilt {
 			who: ALICE,
-			transaction_hash: tx_hash,
-			index: 0,
-			token_contract: token_contract.clone().try_into().unwrap(),
-			to: recipient_clone.try_into().unwrap(),
-			value: amount,
-			chain_id: 1,
-			calldata: Xdex::encode_erc20_transfer(&recipient.clone().try_into().unwrap(), amount),
-			rlp: {
-				let token_arr: [u8; 20] = token_contract.clone().try_into().unwrap();
-				let to = sp_core::H160::from(token_arr);
-				pallet_build_evm_tx::Pallet::<Test>::build_evm_tx(
-					RuntimeOrigin::signed(ALICE),
-					Some(to),
-					0,
-					Xdex::encode_erc20_transfer(&recipient.clone().try_into().unwrap(), amount),
-					0,
-					100_000,
-					30_000_000_000,
-					2_000_000_000,
-					Vec::new(),
-					1,
-				)
-				.expect("should build rlp")
-			},
+			rlp: expected_rlp,
 		}));
 
 		// Note: build_evm_tx pallet no longer emits events after the refactor
@@ -117,8 +80,8 @@ fn integration_test_gas_parameters() {
 		// Create transaction with specific gas parameters
 		assert_ok!(Xdex::build_erc20_transfer(
 			RuntimeOrigin::signed(ALICE),
-			token_contract,
-			recipient.clone(),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract).unwrap()),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient.clone()).unwrap()),
 			2_000_000_000_000_000_000u128,
 			0,              // nonce
 			150_000,        // higher gas limit
@@ -127,9 +90,7 @@ fn integration_test_gas_parameters() {
 			1
 		));
 
-		// Transaction should be created with specified gas values
-		assert_eq!(Xdex::transaction_count(ALICE), 1);
-		assert!(Xdex::transaction_hashes(ALICE, 0).is_some());
+		assert!(matches!(System::events().last().unwrap().event, RuntimeEvent::Xdex(_)));
 	});
 }
 
@@ -140,11 +101,11 @@ fn integration_test_maximum_transaction_limit() {
 		let recipient = vec![0xbb; 20];
 
 		// Fill up to maximum
-		for i in 0..MaxTransactionsPerAccount::get() {
+		for i in 0..3 {
 			assert_ok!(Xdex::build_erc20_transfer(
 				RuntimeOrigin::signed(ALICE),
-				token_contract.clone(),
-				recipient.clone(),
+				H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract.clone()).unwrap()),
+				H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient.clone()).unwrap()),
 				100 * (i + 1) as u128,
 				i as u64, // nonce
 				100_000,
@@ -154,42 +115,7 @@ fn integration_test_maximum_transaction_limit() {
 			));
 		}
 
-		// Verify we're at max
-		assert_eq!(Xdex::transaction_count(ALICE), MaxTransactionsPerAccount::get());
-
-		// Next one should fail
-		assert_noop!(
-			Xdex::build_erc20_transfer(
-				RuntimeOrigin::signed(ALICE),
-				token_contract.clone(),
-				recipient.clone(),
-				999999,
-				MaxTransactionsPerAccount::get() as u64, // nonce
-				100_000,
-				30_000_000_000,
-				2_000_000_000,
-				1
-			),
-			Error::<Test>::TooManyTransactions
-		);
-
-		// Clear and try again
-		assert_ok!(Xdex::clear_transactions(RuntimeOrigin::signed(ALICE)));
-		assert_eq!(Xdex::transaction_count(ALICE), 0);
-
-		// Now we can add transactions again
-		assert_ok!(Xdex::build_erc20_transfer(
-			RuntimeOrigin::signed(ALICE),
-			token_contract,
-			recipient,
-			111111,
-			0, // nonce resets after clear
-			100_000,
-			30_000_000_000,
-			2_000_000_000,
-			1
-		));
-		assert_eq!(Xdex::transaction_count(ALICE), 1);
+		assert!(matches!(System::events().last().unwrap().event, RuntimeEvent::Xdex(_)));
 	});
 }
 
@@ -203,8 +129,8 @@ fn integration_test_different_recipients_same_sender() {
 		for (i, recipient) in recipients.iter().enumerate() {
 			assert_ok!(Xdex::build_erc20_transfer(
 				RuntimeOrigin::signed(ALICE),
-				token_contract.clone(),
-				recipient.clone(),
+				H160::from(token_contract.clone().try_into().unwrap()),
+				H160::from(recipient.clone().try_into().unwrap()),
 				1000 * (i + 1) as u128,
 				i as u64, // nonce
 				100_000,
@@ -214,16 +140,7 @@ fn integration_test_different_recipients_same_sender() {
 			));
 		}
 
-		// Verify all transactions are stored with different hashes
-		assert_eq!(Xdex::transaction_count(ALICE), 3);
-
-		let hash1 = Xdex::transaction_hashes(ALICE, 0).unwrap();
-		let hash2 = Xdex::transaction_hashes(ALICE, 1).unwrap();
-		let hash3 = Xdex::transaction_hashes(ALICE, 2).unwrap();
-
-		assert_ne!(hash1, hash2);
-		assert_ne!(hash2, hash3);
-		assert_ne!(hash1, hash3);
+		assert!(matches!(System::events().last().unwrap().event, RuntimeEvent::Xdex(_)));
 	});
 }
 
@@ -236,8 +153,8 @@ fn integration_test_different_chains() {
 		// Create transactions for different chains
 		assert_ok!(Xdex::build_erc20_transfer(
 			RuntimeOrigin::signed(ALICE),
-			token_contract.clone(),
-			recipient.clone(),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract.clone()).unwrap()),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient.clone()).unwrap()),
 			1000,
 			0,
 			100_000,
@@ -248,8 +165,8 @@ fn integration_test_different_chains() {
 
 		assert_ok!(Xdex::build_erc20_transfer(
 			RuntimeOrigin::signed(ALICE),
-			token_contract.clone(),
-			recipient.clone(),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract.clone()).unwrap()),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient.clone()).unwrap()),
 			2000,
 			1,
 			100_000,
@@ -260,8 +177,8 @@ fn integration_test_different_chains() {
 
 		assert_ok!(Xdex::build_erc20_transfer(
 			RuntimeOrigin::signed(ALICE),
-			token_contract,
-			recipient,
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract).unwrap()),
+			H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient).unwrap()),
 			3000,
 			2,
 			100_000,
@@ -270,16 +187,6 @@ fn integration_test_different_chains() {
 			137 // Polygon mainnet
 		));
 
-		// All transactions should be stored
-		assert_eq!(Xdex::transaction_count(ALICE), 3);
-
-		// Different chain IDs should produce different hashes
-		let hash1 = Xdex::transaction_hashes(ALICE, 0).unwrap();
-		let hash2 = Xdex::transaction_hashes(ALICE, 1).unwrap();
-		let hash3 = Xdex::transaction_hashes(ALICE, 2).unwrap();
-
-		assert_ne!(hash1, hash2);
-		assert_ne!(hash2, hash3);
-		assert_ne!(hash1, hash3);
+		assert!(matches!(System::events().last().unwrap().event, RuntimeEvent::Xdex(_)));
 	});
 }

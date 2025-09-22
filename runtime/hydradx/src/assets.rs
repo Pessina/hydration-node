@@ -1833,9 +1833,6 @@ parameter_types! {
 
 impl pallet_xdex::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type MaxTransactionsPerAccount = MaxTransactionsPerAccount;
-	type TokenContractAddress = XdexTokenContractAddress;
-	type DefaultChainId = XdexDefaultChainId;
 }
 
 pub struct ConvertViaOmnipool<SP>(PhantomData<SP>);

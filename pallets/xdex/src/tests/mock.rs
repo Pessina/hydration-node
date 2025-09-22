@@ -55,15 +55,7 @@ impl frame_system::Config for Test {
 	type PostTransactions = ();
 }
 
-parameter_types! {
-	pub const MaxTransactionsPerAccount: u32 = 10;
-	pub const MaxDataLength: u32 = 100_000;
-	pub const TokenContractAddress: [u8; 20] = [
-		0xA0, 0xb8, 0x69, 0x91, 0xc6, 0x21, 0x8b, 0x36, 0xc1, 0xd1,
-		0x9D, 0x4a, 0x2e, 0x9E, 0xb0, 0xce, 0x36, 0x06, 0xeB, 0x48,
-	];
-	pub const DefaultChainId: u64 = 1; // Ethereum mainnet
-}
+parameter_types! { pub const MaxDataLength: u32 = 100_000; }
 
 impl pallet_build_evm_tx::Config for Test {
 	type MaxDataLength = MaxDataLength;
@@ -71,9 +63,6 @@ impl pallet_build_evm_tx::Config for Test {
 
 impl pallet_xdex::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type MaxTransactionsPerAccount = MaxTransactionsPerAccount;
-	type TokenContractAddress = TokenContractAddress;
-	type DefaultChainId = DefaultChainId;
 }
 
 pub struct ExtBuilder;
