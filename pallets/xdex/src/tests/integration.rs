@@ -129,8 +129,8 @@ fn integration_test_different_recipients_same_sender() {
 		for (i, recipient) in recipients.iter().enumerate() {
 			assert_ok!(Xdex::build_erc20_transfer(
 				RuntimeOrigin::signed(ALICE),
-				H160::from(token_contract.clone().try_into().unwrap()),
-				H160::from(recipient.clone().try_into().unwrap()),
+				H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(token_contract.clone()).unwrap()),
+				H160::from(<Vec<u8> as TryInto<[u8; 20]>>::try_into(recipient.clone()).unwrap()),
 				1000 * (i + 1) as u128,
 				i as u64, // nonce
 				100_000,
