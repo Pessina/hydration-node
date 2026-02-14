@@ -201,6 +201,8 @@ construct_runtime!(
 		Liquidation: pallet_liquidation = 76,
 		HSM: pallet_hsm = 82,
 		Parameters: pallet_parameters = 83,
+		BuildEvmTx: pallet_build_evm_tx = 86,
+		Signet: pallet_signet = 84,
 
 		// ORML related modules
 		Tokens: orml_tokens = 77,
@@ -344,7 +346,9 @@ mod benches {
 		[pallet_whitelist, Whitelist]
 		[pallet_dispatcher, Dispatcher]
 		[pallet_hsm, HSM]
+		[pallet_build_evm_tx, BuildEvmTx]
 		[pallet_dynamic_fees, DynamicFees]
+		[pallet_signet, Signet]
 	);
 }
 
